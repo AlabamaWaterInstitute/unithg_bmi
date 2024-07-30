@@ -45,7 +45,7 @@ Thumbs.db
 #################
 *.pyc
 *.egg-info/
-__pycache__/
+*__pycache__*
 *.py[cod]
 .env
 .python-version
@@ -75,3 +75,8 @@ bower_components/
 .grunt/
 src/vendor/
 dist/
+
+# Scripting and Testing #
+#########################
+*.sh
+*.ipynb

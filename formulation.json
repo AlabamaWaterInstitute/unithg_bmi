@@ -1,0 +1,33 @@
+{
+    "name": "bmi_python",
+    "params": {
+        "name": "pyflo_bmi",
+        "model_type_name": "pyflo_bmi_model",
+        "main_output_variable": "discharge_calculated",
+        "init_config": "/dev/null",
+        "allow_exceed_end_time": true,
+        "fixed_time_step": false,
+        "uses_forcing_file": true,
+        "forcing_file": "./forcings/by_catchment/{{id}}.csv",
+        "python_type": "pyflo_bmi.Bmi_Pyflo",
+        "variables_names_map": {
+        },
+        "output_variables": [
+            "discharge_calculated"
+        ],
+        "model_params": {
+            "areasqkm": {
+                "source": "hydrofabric",
+                "from": "areasqkm"
+            },
+            "lengthkm": {
+                "source": "hydrofabric",
+                "from": "lengthkm"
+            },
+            "tot_drainage_areasqkm": {
+                "source": "hydrofabric",
+                "from": "tot_drainage_areasqkm"
+            }
+        }
+    }
+}
