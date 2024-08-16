@@ -136,12 +136,9 @@ class Bmi_Pyflo(Bmi):
     _time: float = 0.0
     _time_step: int = 0
     _time_units: str = "s"
-    _vars: dict[VarType, List[Var]] = {
-        VarType.INPUT: [],
-        VarType.OUTPUT: [],
-        VarType.MODEL: [],
-    }
-    _all_vars: dict[str, Var] = {}
+    # initialize in __init__ as instance variables
+    _vars: dict[VarType, List[Var]] 
+    _all_vars: dict[str, Var]
     _model_data: dict[str, Any] = {}
     _model: object = None
     
@@ -194,7 +191,14 @@ class Bmi_Pyflo(Bmi):
         """
         super(self.__class__, self).__init__()
         self.info()
-        
+        #Ensure these are initialized as instance variables, not class variables
+        self._vars = {
+            Bmi_Pyflo.VarType.INPUT: [],
+            Bmi_Pyflo.VarType.OUTPUT: [],
+            Bmi_Pyflo.VarType.MODEL: [],
+        }
+        self. _all_vars = {}
+
     @_info_category(["internal", "helpers", "variables"])
     def _add_var(self, var:Var, vartype:VarType = VarType.MODEL) -> None:
         """
