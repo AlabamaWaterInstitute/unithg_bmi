@@ -1,6 +1,9 @@
 from bmipy import Bmi
-from typing import List, Dict, Tuple, Any
-import sys, os
+from typing import List, Dict, Tuple, Any, Union
+# from types import NoneType
+import sys, os, re, warnings, enum
+from pathlib import Path
+import numpy as np
 
 from numpy import ndarray
 from .src import debug_utils as du
@@ -75,32 +78,70 @@ class Bmi_Pyflo(Bmi):
         - `get_grid_z`
     """
     
+    class VarType(enum.Enum):
+        """
+        Enumeration of variable types.
+        """
+        INPUT = 0
+        OUTPUT = 1
+        MODEL = 2
+    
     class Var:
         """
         All 6 attributes compressed into a single class.
         Saves space and time over handling the 6 attributes separately.
         """
         _fields = ["name", "type", "value", "units", "nbytes", "itemsize", "location", "grid"]
-        _defaults = ["", "double", 0.0, "m/s", 8, 8, "node", "none"]
-        def __init__(self, name: str, type: str = None, value: float = None, units: str = None, nbytes: int = None, itemsize: int = None, location: str = None, grid: str = None):
+        _defaults = ["", "float", 0.0, "m/s", 8, 8, "node", "none"]
+        name, type, value, units, nbytes, itemsize, location, grid = _defaults
+        value: np.ndarray
+        def __init__(self, name: str, type: str = None, value: Union[float, np.ndarray] = None, units: str = None, nbytes: int = None, itemsize: int = None, location: str = None, grid: str = None):
             """
             Initialize a new variable object.
             """
             self.name = name
-            for i, field in enumerate(self._fields[1:]):
+            if value is not None:
+                self.value = value if isinstance(value, np.ndarray) else np.array([value])
+            for i, field in enumerate(self._fields):
+                if hasattr(self, field):
+                    # we already set this attribute
+                    continue
                 setattr(self, field, locals()[field] if locals()[field] is not None else self._defaults[i])
+            if not isinstance(self.value, np.ndarray):
+                self.value = np.array([self.value])
+        def get_ptr(self):
+            """
+            Get a pointer to the value of the variable.
+            """
+            return self.value
+        def get_value(self):
+            """
+            Get the value of the variable.
+            """
+            return self.value[0]
+        def set_value(self, value: Union[float, np.ndarray]):
+            """
+            Set the value of the variable.
+            """
+            if isinstance(value, np.ndarray):
+                self.value[0] = value[0]
+            else:
+                self.value[0] = value
     # Internal model attributes
     _name: str = "PyFlo_BMI"
     _start_time: float = 0.0
-    _num_time_steps: int = 24
+    _num_time_steps: int = 720
     _time_step_size: float = 1.0
     _end_time: float = 0.0
     _time: float = 0.0
     _time_step: int = 0
     _time_units: str = "s"
-    _input_vars: list[Var] = []
-    _output_vars: list[Var] = []
-    _vars: dict[str, Var] = {}
+    _vars: dict[VarType, List[Var]] = {
+        VarType.INPUT: [],
+        VarType.OUTPUT: [],
+        VarType.MODEL: [],
+    }
+    _all_vars: dict[str, Var] = {}
     _model_data: dict[str, Any] = {}
     _model: object = None
     
@@ -143,6 +184,8 @@ class Bmi_Pyflo(Bmi):
         "variables",
         "grid",
     ]
+    
+    track_variables: List[str] = []
         
     @_info_category(["py-init"])
     def __init__(self):
@@ -151,65 +194,34 @@ class Bmi_Pyflo(Bmi):
         """
         super(self.__class__, self).__init__()
         self.info()
-        # Input variables
-        ## Hydrograph-sourced variables
-        # self._add_vars(
-        #     [
-        #         self.Var("areasqkm", "float", 0.0, "km^2", 8, 8, "node", "none"),
-        #         self.Var("lengthkm", "float", 0.0, "km", 8, 8, "node", "none"),
-        #         self.Var("tot_drainage_areasqkm", "float", 0.0, "km^2", 8, 8, "node", "none"),
-        #     ],
-        #     is_input=True
-        # )
-        ## Forcing variables
-        # (time,DLWRF_surface,PRES_surface,SPFH_2maboveground,precip_rate,DSWRF_surface,TMP_2maboveground,UGRD_10maboveground,VGRD_10maboveground,APCP_surface)
-        # skip time, it's a string of some format.
         
     @_info_category(["internal", "helpers", "variables"])
-    def _add_var(self, var:Var, is_input:bool = False) -> None:
+    def _add_var(self, var:Var, vartype:VarType = VarType.MODEL) -> None:
         """
         Add a variable to the model.
         """
-        self._vars[var.name] = var
-        if is_input:
-            self._input_vars.append(var)
-        else:
-            self._output_vars.append(var)
+        self._all_vars[var.name] = var
+        self._vars[vartype].append(var)
 
     @_info_category(["internal", "helpers", "variables"])
-    def _add_vars(self, vars:List[Var], is_input:bool = False) -> None:
+    def _add_vars(self, vars:List[Var], var_type:VarType = VarType.MODEL) -> None:
         """
         Add a list of variables to the model.
         """
         self.info()
         for var in vars:
-            self._add_var(var, is_input)
+            self._add_var(var, var_type)
+    
 
-    @_info_category(["internal", "helpers", "variables", "bmi-init"])
-    def _add_model_inputs(self) -> None:
-        """
-        Add the model input variables.
-        """
-        self.info()
-        self._add_vars(
-            [
-                self.Var("areasqkm", "float", 0.0, "km^2", 8, 8, "node", "none"),
-                self.Var("lengthkm", "float", 0.0, "km", 8, 8, "node", "none"),
-                self.Var("tot_drainage_areasqkm", "float", 0.0, "km^2", 8, 8, "node", "none"),
-            ],
-            is_input=True
-        )
-        
-
-    def info(self):
+    def info(self, msg:str = None) -> None:
         call_func = du.__func__(1)
         if call_func in self._info_cats:
             categories = self._info_cats[call_func]
             if any(cat in self.suppress_info_categories for cat in categories):
                 return
-        msg = f"'{__name__}';"
-        msg += du.__info__(msg="", offset=1)
-        print(msg, file=sys.stderr, flush=True)
+        send_msg = f"'{__name__}';"
+        send_msg += du.__info__(msg, offset=1)
+        print(send_msg, file=sys.stderr, flush=True)
 
 
 
@@ -222,9 +234,16 @@ class Bmi_Pyflo(Bmi):
         """
         self.info()
         self._start_time = self.get_start_time()
-        self._add_model_inputs()
-        self._add_vars(
-            [
+        config_vars = []
+        if config_file:
+            config_vars = self.read_config(config_file)
+        if len(config_vars) == 0:
+            config_vars = [
+                self.Var("area_sqkm", "float", 0.0, "km^2", 8, 8, "node", "none")
+            ]
+            self.track_variables.append("area_sqkm")
+        vars_for_input = []
+        forcing_vars = [
                 self.Var("DLWRF_surface", "float", 0.0, "W/m^2", 8, 8, "node", "none"),
                 self.Var("PRES_surface", "float", 0.0, "Pa", 8, 8, "node", "none"),
                 self.Var("SPFH_2maboveground", "float", 0.0, "kg/kg", 8, 8, "node", "none"),
@@ -234,16 +253,89 @@ class Bmi_Pyflo(Bmi):
                 self.Var("UGRD_10maboveground", "float", 0.0, "m/s", 8, 8, "node", "none"),
                 self.Var("VGRD_10maboveground", "float", 0.0, "m/s", 8, 8, "node", "none"),
                 self.Var("APCP_surface", "float", 0.0, "kg/m^2", 8, 8, "node", "none"),
-            ],
-            is_input=True
+            ]
+        vars_for_input.extend(forcing_vars)
+        self._add_vars(
+            vars_for_input,
+            var_type=self.VarType.INPUT
+        )
+        
+        self._add_vars(
+            config_vars,
+            var_type=self.VarType.MODEL
         )
 
 
         # Output variables
         self._add_var(
             self.Var("discharge_calculated", "float", 0.0, "m^3/s", 8, 8, "node", "none"),
-            is_input=False
+            vartype=self.VarType.OUTPUT
         )
+        
+    # read_config
+    @_info_category(["bmi", "init"])
+    def read_config(self, config_file: str) -> List[Var]:
+        """
+        Read the model configuration from a file.
+        """
+        self.info()
+        print(f"Reading config file '{config_file}'...", file=sys.stderr, flush=True)
+        if not isinstance(config_file, str):
+            raise ValueError("Config file must be a string.")
+        _config_file = Path(config_file).resolve()
+        if not _config_file.exists():
+            raise FileNotFoundError(f"Config file '{config_file}' not found.")
+        with open(_config_file, "r") as f:
+            config = f.read()
+        if config == "":
+            return []
+        if config is None:
+            raise ValueError("Config file is empty.")
+        # Parse the config
+        config_lines = config.split("\n")
+        type_coercion = {
+            "float": float,
+            "double": float,
+            "int": int,
+            "str": str,
+            "bool": bool,
+        }
+        header = config_lines[0]
+        header = header.split(",")
+        header = [h.strip() for h in header]
+        acceptable_headers = [
+            "name",
+            "type",
+            "value",
+            "units",
+            "nbytes",
+            "itemsize",
+            "location",
+            "grid",
+        ]
+        for h in header:
+            if h not in acceptable_headers:
+                raise ValueError(f"Invalid header '{h}' in config file.")
+        config_vars = []
+        for line in config_lines[1:]:
+            if len(line) == 0:
+                continue
+            line = line.split(",")
+            line = [l.strip() for l in line]
+            if len(line) != len(header):
+                raise ValueError(f"Invalid line '{line}' in config file. Expected {len(header)} columns, got {len(line)}.")
+            var = {}
+            for i, h in enumerate(header):
+                var[h] = line[i]
+            if var["type"] in type_coercion:
+                var["value"] = type_coercion[var["type"]](var["value"])
+            var["nbytes"] = int(var["nbytes"])
+            var["itemsize"] = int(var["itemsize"])
+            _var = self.Var(**var)
+            config_vars.append(_var)
+            self.info(f"Added config var '{_var.name}' with value '{_var.value}'.")
+        return config_vars
+                
 
     @_info_category(["bmi", "update"])
     def update(self) -> None:
@@ -251,13 +343,13 @@ class Bmi_Pyflo(Bmi):
         Update the model by one time step.
         """
         self.info()
-        # quick bypass for now
-        self._time += self._time_step_size
-        return
+        # # quick bypass for now
+        # self._time += self._time_step_size
+        # return
         if self._model is None:
-            areasqkm = self.get_value("areasqkm")
-            self._model = unit_hydrograph_model(area=areasqkm, duration=self._num_time_steps * self._time_step_size, interval=self._time_step_size)
-        result = self._model.step()
+            area_sqkm = self.get_value("area_sqkm")
+            self._model = unit_hydrograph_model(area=area_sqkm, duration=self._num_time_steps * self._time_step_size, interval=self._time_step_size)
+        result = self._model.step(self.get_value("APCP_surface"), self._time)
         self.set_value("discharge_calculated", result)
         self._time += self._time_step_size
 
@@ -267,8 +359,10 @@ class Bmi_Pyflo(Bmi):
         Update the model until the given time.
         """
         self.info()
-        for _ in range(int((time - self._time) / self._time_step_size)):
-            self.update()
+        # for _ in range(int((time - self._time) / self._time_step_size)):
+        #     self.update()
+        self._time = time
+        self.update()
 
     @_info_category(["bmi-finalize"])
     def finalize(self) -> None:
@@ -336,35 +430,30 @@ class Bmi_Pyflo(Bmi):
         Get a variable object by name.
         """
         self.info()
-        if name in self._vars:
-            return self._vars[name]
-        for var in self._input_vars:
-            if var.name == name:
-                return var
-        for var in self._output_vars:
-            if var.name == name:
-                return var
-        return None
+        return self._all_vars.get(name, None)
     
     @_info_category(["bmi", "var-set"])
-    def set_value(self, name: str, value: float) -> None:
+    def set_value(self, name: str, value: Any) -> None:
         """
         Set the value of a variable.
         """
         self.info()
+        if name in self.track_variables:
+            print(f"Setting variable '{name}' to value '{value}'.", file=sys.stderr, flush=True)
         var = self._get_var(name)
         if var is not None:
-            var.value = value
+            var.set_value(value)
         else:
             raise ValueError(f"Variable '{name}' not found.")
         
     @_info_category(["bmi", "var-set"])
-    def set_value_at_indices(self, name: str, indices: List[int], value: float) -> None:
+    def set_value_at_indices(self, name: str, indices: np.ndarray, src: np.ndarray) -> None:
         """
         Set the value of a variable at specific indices.
         """
         self.info()
-        raise UnimplementedError()
+        var_ptr = self.get_value_ptr(name)
+        var_ptr[indices] = src
 
     # BMI: Variable Getters
 
@@ -376,17 +465,19 @@ class Bmi_Pyflo(Bmi):
         self.info()
         var = self._get_var(name)
         if var is not None:
-            return var.value
+            return var.get_value()
         else:
             raise ValueError(f"Variable '{name}' not found.")
         
     @_info_category(["bmi", "var-get", "no-calc"])
-    def get_value_at_indices(self, name: str, indices: List[int]) -> float:
+    def get_value_at_indices(self, name: str, dest: np.ndarray, inds: np.ndarray) -> np.ndarray:
         """
         Get the value of a variable at specific indices.
         """
         self.info()
-        raise UnimplementedError()
+        var_ptr = self.get_value_ptr(name)
+        dest[inds] = var_ptr[inds]
+        return dest
 
     @_info_category(["bmi", "var-get", "no-calc"])
     def get_value_ptr(self, name: str) -> Any:
@@ -394,7 +485,11 @@ class Bmi_Pyflo(Bmi):
         Get a pointer to the value of a variable.
         """
         self.info()
-        raise UnimplementedError()
+        var = self._get_var(name)
+        if var is not None:
+            return var.get_ptr()
+        else:
+            raise ValueError(f"Variable '{name}' not found.")
 
     # BMI: Variable Information
 
@@ -476,7 +571,7 @@ class Bmi_Pyflo(Bmi):
         Get the names of the input variables.
         """
         self.info()
-        return [var.name for var in self._input_vars]
+        return [var.name for var in self._vars[self.VarType.INPUT]]
     
     @_info_category(["bmi", "var-get", "no-calc"])
     def get_output_var_names(self) -> List[str]:
@@ -484,7 +579,7 @@ class Bmi_Pyflo(Bmi):
         Get the names of the output variables.
         """
         self.info()
-        return [var.name for var in self._output_vars]
+        return [var.name for var in self._vars[self.VarType.OUTPUT]]
     
     @_info_category(["bmi", "var-get", "no-calc"])
     def get_input_item_count(self) -> int:
@@ -492,7 +587,7 @@ class Bmi_Pyflo(Bmi):
         Get the number of input items.
         """
         self.info()
-        return len(self._input_vars)
+        return len(self._vars[self.VarType.INPUT])
     
     @_info_category(["bmi", "var-get", "no-calc"])
     def get_output_item_count(self) -> int:
@@ -500,7 +595,7 @@ class Bmi_Pyflo(Bmi):
         Get the number of output items.
         """
         self.info()
-        return len(self._output_vars)
+        return len(self._vars[self.VarType.OUTPUT])
     
     # BMI: Grid Information
 
