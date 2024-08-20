@@ -8,7 +8,7 @@ import numpy as np
 from numpy import ndarray
 from .src import debug_utils as du
 from .src.debug_utils import UnimplementedError
-from .pyflo_model import unit_hydrograph_model
+from .pyflo_model import unit_hydrograph_model, unit_hydrograph_model_2
 
 info_cats = {}
 # category decorator
@@ -352,7 +352,7 @@ class Bmi_Pyflo(Bmi):
         # return
         if self._model is None:
             area_sqkm = self.get_value("area_sqkm")
-            self._model = unit_hydrograph_model(area=area_sqkm, duration=self._num_time_steps * self._time_step_size, interval=self._time_step_size)
+            self._model = unit_hydrograph_model_2(area=area_sqkm, duration=self._num_time_steps * self._time_step_size, interval=self._time_step_size)
         result = self._model.step(self.get_value("APCP_surface"), self._time)
         self.set_value("discharge_calculated", result)
         self._time += self._time_step_size
