@@ -1,5 +1,5 @@
 from bmipy import Bmi
-from typing import List, Dict, Tuple, Any, Union
+from typing import List, Dict, Tuple, Any, Union, Optional
 # from types import NoneType
 import sys, os, re, warnings, enum
 from pathlib import Path
@@ -95,7 +95,7 @@ class Bmi_Pyflo(Bmi):
         _defaults = ["", "float", 0.0, "m/s", 8, 8, "node", "none"]
         name, type, value, units, nbytes, itemsize, location, grid = _defaults
         value: np.ndarray
-        def __init__(self, name: str, type: str = None, value: Union[float, np.ndarray] = None, units: str = None, nbytes: int = None, itemsize: int = None, location: str = None, grid: str = None):
+        def __init__(self, name: str, type: Optional[str], value: Union[float, np.ndarray,None], units: Optional[str], nbytes: Optional[int], itemsize: Optional[int], location: Optional[str], grid: Optional[str]):
             """
             Initialize a new variable object.
             """
@@ -140,7 +140,7 @@ class Bmi_Pyflo(Bmi):
     _vars: dict[VarType, List[Var]] 
     _all_vars: dict[str, Var]
     _model_data: dict[str, Any] = {}
-    _model: object = None
+    _model: Optional[object] = None
     
     _info_categories: List[str] = [
         "python-builtin",
@@ -217,7 +217,7 @@ class Bmi_Pyflo(Bmi):
             self._add_var(var, var_type)
     
 
-    def info(self, msg:str = None) -> None:
+    def info(self, msg: Optional[str]) -> None:
         call_func = du.__func__(1)
         if call_func in self._info_cats:
             categories = self._info_cats[call_func]
@@ -232,7 +232,7 @@ class Bmi_Pyflo(Bmi):
     # BMI: Bookkeeping
 
     @_info_category(["bmi-init"])
-    def initialize(self, config_file: str = None) -> None:
+    def initialize(self, config_file: Optional[str]) -> None:
         """
         Initialize the model.
         """
