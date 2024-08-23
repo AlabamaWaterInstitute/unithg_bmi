@@ -1,5 +1,5 @@
 from bmipy import Bmi
-from typing import List, Dict, Tuple, Any, Union
+from typing import List, Tuple, Dict, Set, Any, Union, Callable, Literal, Optional
 # from types import NoneType
 import sys, os, re, warnings, enum
 from pathlib import Path
@@ -8,7 +8,7 @@ import numpy as np
 from numpy import ndarray
 from .src import debug_utils as du
 from .src.debug_utils import UnimplementedError
-from .pyflo_model import unit_hydrograph_model, unit_hydrograph_model_2
+from .pyflo_model_reworked import unit_hydrograph_model
 
 info_cats = {}
 # category decorator
@@ -129,17 +129,17 @@ class Bmi_Pyflo(Bmi):
                 self.value[0] = value
     # Internal model attributes
     _name: str = "PyFlo_BMI"
-    _start_time: float = 0.0
-    _num_time_steps: int = 720
-    _time_step_size: float = 1.0
-    _end_time: float = 0.0
-    _time: float = 0.0
-    _time_step: int = 0
+    _start_time: float# = 0.0
+    _num_time_steps: int# = 720
+    _time_step_size: float# = 1.0
+    _end_time: float# = 0.0
+    _time: float# = 0.0
+    _time_step: int# = 0
     _time_units: str = "s"
     # initialize in __init__ as instance variables
     _vars: dict[VarType, List[Var]] 
     _all_vars: dict[str, Var]
-    _model_data: dict[str, Any] = {}
+    _model_data: dict[str, Any]# = {}
     _model: object = None
     
     _info_categories: List[str] = [
@@ -182,7 +182,7 @@ class Bmi_Pyflo(Bmi):
         "grid",
     ]
     
-    track_variables: List[str] = []
+    track_variables: List[str]# = []
         
     @_info_category(["py-init"])
     def __init__(self):
@@ -197,7 +197,16 @@ class Bmi_Pyflo(Bmi):
             Bmi_Pyflo.VarType.OUTPUT: [],
             Bmi_Pyflo.VarType.MODEL: [],
         }
-        self. _all_vars = {}
+        self._model = None
+        self._model_data = {}
+        self._all_vars = {}
+        self.track_variables = []
+        
+        self._time = 0.0
+        self._time_step = 0
+        self._time_step_size = 1.0
+        self._num_time_steps = 720
+        self._start_time = 0.0
 
     @_info_category(["internal", "helpers", "variables"])
     def _add_var(self, var:Var, vartype:VarType = VarType.MODEL) -> None:
@@ -246,6 +255,7 @@ class Bmi_Pyflo(Bmi):
                 self.Var("area_sqkm", "float", 0.0, "km^2", 8, 8, "node", "none")
             ]
             self.track_variables.append("area_sqkm")
+            # self.track_variables.append("discharge_calculated")
         vars_for_input = []
         forcing_vars = [
                 self.Var("DLWRF_surface", "float", 0.0, "W/m^2", 8, 8, "node", "none"),
@@ -351,11 +361,20 @@ class Bmi_Pyflo(Bmi):
         # self._time += self._time_step_size
         # return
         if self._model is None:
-            area_sqkm = self.get_value("area_sqkm")
-            self._model = unit_hydrograph_model_2(area=area_sqkm, duration=self._num_time_steps * self._time_step_size, interval=self._time_step_size)
-        result = self._model.step(self.get_value("APCP_surface"), self._time)
+            area_sqkm = float(self.get_value("area_sqkm"))
+            self._model = unit_hydrograph_model(area=area_sqkm, interval=5)
+        # send one hour of rainfall to the model
+        rain_depth = float(self.get_value("APCP_surface"))
+        # result = float(self._model.get_current_flow_period(60))
+        self._model.add_rain_period(rain_depth, 60)
+        # receive one hour of discharge from the model
+        result = float(self._model.get_current_flow_period(60))
+        # if result > 0:
+        #     print(f"{self._time}]Rain depth: {rain_depth}, Discharge: {result}.", file=sys.stderr, flush=True)
         self.set_value("discharge_calculated", result)
+        assert self.get_value("discharge_calculated") == result, f"Discharge set to {result}, but get_value returned {self.get_value('discharge_calculated')}."
         self._time += self._time_step_size
+        self._time_step += 1
 
     @_info_category(["bmi", "update"])
     def update_until(self, time: float) -> None:

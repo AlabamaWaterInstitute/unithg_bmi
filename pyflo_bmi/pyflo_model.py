@@ -137,7 +137,7 @@ class unit_hydrograph_model:
     ])
     area:float
     cn:float = 100.0 #83.0
-    tc:float = 2.3
+    tc:float = 1.5
     peak_factor:int = 1
     interval:float
     basin:Basin
@@ -152,6 +152,7 @@ class unit_hydrograph_model:
             raise ValueError("Interval must be a number.")
         # given in sqkm, convert to acres
         area = area * FACTOR_CONVERSIONS["sqkm"]["acres"]
+        # area = 1
         self.area = area
         self.basin = Basin(
             area=area,
@@ -222,7 +223,22 @@ class unit_hydrograph_model:
 class unit_hydrograph_model_2(unit_hydrograph_model):
     """Simplified version of the unit hydrograph model class. Instead of creating and summing many arrays, maintain a single array and update it in place."""
     default_curve:np.ndarray = unit_hydrograph_model.default_curve.copy()
-    # default_curve[:,0] = default_curve[:,0] * 2
+    # default_curve:np.ndarray = np.array([
+    #     [0.0, 0.0], [0.1, 0.03], [0.2, 0.1], [0.3, 0.19], [0.4, 0.31], [0.5, 0.47], [0.6, 0.66], 
+    #     [0.7, 0.82], [0.8, 0.93], [0.9, 0.99], [1.0, 1.0], [1.1, 0.99], [1.2, 0.93], [1.3, 0.86], 
+    #     [1.4, 0.78], [1.5, 0.68], [1.6, 0.56], [1.7, 0.46], [1.8, 0.39], [1.9, 0.33], [2.0, 0.28], 
+    #     [2.2, 0.207], [2.4, 0.147], [2.6, 0.107], [2.8, 0.077], [3.0, 0.055], [3.2, 0.04], 
+    #     [3.4, 0.029], [3.6, 0.021], [3.8, 0.015], [4.0, 0.011], [4.5, 0.005], [5.0, 0.0], 
+    # ])
+    default_curve:np.ndarray = np.array([
+        [0.0, 0.0], [1.0, 1.0], [2.0, 0.0]
+    ])
+    default_curve:np.ndarray = np.array([
+        [0.0, 0.0],[0.99,0.5],[1, 1.0]
+    ])
+    default_curve_intervals = np.diff(default_curve[:,0])
+    default_curve_total = np.sum(default_curve_intervals * default_curve[1:,1])
+    default_curve[:,1] = default_curve[:,1] / default_curve_total
     def __init__(self, area:float = 0, duration:float = 24.0, interval:float = 1.0):
         super().__init__(area, duration, interval)
         self.flow_curve = self.empty_curve.copy()
@@ -237,12 +253,16 @@ class unit_hydrograph_model_2(unit_hydrograph_model):
             The runoff depth in inches.
         flow: float
             The flow rate in m^3/s.
+        
+        interval: float
+            The interval of time between each timestep in hours.
         """
         area_sqkm = self.area * FACTOR_CONVERSIONS["acres"]["sqkm"]
         area_sqm = area_sqkm * 1e6
         runoff_m = runoff * 0.0254
-        flow = runoff_m * area_sqm / self.interval / 3600
-        return flow
+        flow_volume = runoff_m * area_sqm
+        flow_rate = flow_volume / self.interval / 3600
+        return flow_rate
     
     def convert_rainfall_to_raindepth(self, rainfall:np.ndarray)->np.ndarray:
         """
@@ -383,7 +403,7 @@ def make_test_raindata_regular(timesteps: int = 100, rainperiod: int = 100, ampl
     event_length_factor_mult =  1 - event_length_factor_shift
     raindata = np.sin(times * sin_period) - event_length_factor_shift
     raindata = np.maximum(0, raindata)
-    return raindata * amplitude / event_length_factor_mult
+    return np.ceil(raindata * amplitude / event_length_factor_mult)
 
 
 def test_functionality():
@@ -401,8 +421,10 @@ def test_functionality():
         rainperiod=100, 
         amplitude=amplitude, 
         num_events=1,
-        event_length_factor=0
+        event_length_factor=0.9
         )
+    np.random.seed(0)
+    # raindata = raindata * np.random.uniform(0.5, 1.5, size=raindata.shape)
     num_gt_zero = np.count_nonzero(raindata)
     print(f"Number of timesteps with rainfall: {num_gt_zero}/{len(raindata)}")
     print(f"Max rainfall: {np.max(raindata)}")
@@ -419,7 +441,9 @@ def test_functionality():
     _flow = np.zeros(len(raindata) + 20)
     _given_rain = np.zeros(len(raindata) + 20)
     areasqkm = 15
-    model = unit_hydrograph_model_2(area=15, duration=len(_flow), interval=1)
+    model = unit_hydrograph_model_2(area=areasqkm, duration=len(_flow), interval=1)
+    # areasqkm = model.area * FACTOR_CONVERSIONS["acres"]["sqkm"]
+    # areasqkm = 15
     out_arrs = []
     for i, _ in enumerate(_flow):
         rain = 0 if i >= len(raindata) else raindata[i]
@@ -432,11 +456,17 @@ def test_functionality():
         #     print(f"{rain} -> {sum_flow}")
         _flow[i] = flow
         _given_rain[i] = rain
+    raindata_m = raindata * 1e-3
+    areasqm = areasqkm * 1e6
+    raindata_m3 = raindata_m * areasqm
+    raindata_to_m3_factor = 1e-3 * 1e6 * areasqkm
+    model_flow = model.flow_curve[:,1] * raindata_to_m3_factor
+    model_flow = model_flow[:len(_flow)]
     fig, ax = plt.subplots()
     ax:plt.Axes
     ax.plot(_flow, label="Flow")
     # ax.plot(_given_rain, label="Rainfall")
-    ax.plot(model.flow_curve[:,1], label="Model")
+    ax.plot(model_flow, label="Model")
     ax.set_title("Flow data")
     ax.legend()
     fig.savefig(imgdir / "flow_data.png")
@@ -449,14 +479,15 @@ def test_functionality():
     ax.legend()
     fig.savefig(imgdir / "output_data.png")
     
+    
+    
     # Flow + Rainfall
     fig, ax = plt.subplots()
     ax:plt.Axes
     ax.plot(_flow, label="Flow")
-    ax.plot(raindata, label="Rainfall")
-    ax.plot(_given_rain, label="Given Rainfall", linestyle="--")
-    model_flow = model.flow_curve[:,1]
-    model_flow = model_flow[:len(_flow)]
+    ax.plot(raindata_m3, label="Rainfall")
+    ax.plot(_given_rain * raindata_to_m3_factor, label="Given Rainfall", linestyle="--")
+    
     ax.plot(model_flow, label="Model", linestyle="-.")
     ax.set_title("Flow and Rainfall data")
     ax.legend()
@@ -466,7 +497,7 @@ def test_functionality():
     # Rainfall -> Outputs
     fig, ax = plt.subplots()
     ax:plt.Axes
-    ax.plot(raindata, label="Rainfall")
+    # ax.plot(raindata, label="Rainfall")
     nonzero_raindatas = [[i, raindata[i]] for i in range(len(raindata)) if raindata[i] > 0]
     important_inds = [i for i, _ in nonzero_raindatas]
     ind_count = len(important_inds)
@@ -479,16 +510,12 @@ def test_functionality():
         plotted = ax.plot(associated_out_arr[:,1], label=f"Step {i}")
         color = plotted[0].get_color()
         # ax.bar(i, raindata[i], color=color, alpha=0.5)
+    ax.plot(raindata_m3, label="Rainfall", linestyle="--", color="red")
     ax.set_title("Rainfall and Output data")
     ax.legend()
     fig.savefig(imgdir / "rainfall_output_data.png")
     plt.close()
     
-    # rainfall is in mm, flow is in m^3/s
-    # convert rainfall from mm to m^3
-    raindata_m = raindata * 1e-3
-    areasqm = areasqkm * 1e6
-    raindata_m3 = raindata_m * areasqm
     fig, ax = plt.subplots()
     ax:plt.Axes
     ax.set_title("Rainfall and Flow data")
@@ -532,7 +559,9 @@ def test_functionality():
     fig, ax = plt.subplots()
     ax:plt.Axes
     ax.set_title("Basin unit hydrograph")
-    ax.plot(model.basin.unit_hydrograph(1))
+    basin_hydrograph = model.basin.unit_hydrograph(1)
+    ax.plot(basin_hydrograph[:,0], basin_hydrograph[:,1], color="red")
+    ax.bar(np.arange(0, len(basin_hydrograph)), basin_hydrograph[:,1])
     fig.savefig(imgdir / "basin_unit_hydrograph.png")
     
     
@@ -545,7 +574,7 @@ if __name__ == "__main__":
     # build_smoothened_default_curve()
     test_functionality()
     # print("Unit hydrograph model test complete.")
-    print(np.sum(unit_hydrograph_model.default_curve[:,1]))
+    # print(np.sum(unit_hydrograph_model.default_curve[:,1]))
     default_curve_original:np.ndarray = np.array([
         [0.0, 0.0], [0.1, 0.03], [0.2, 0.1], [0.3, 0.19], [0.4, 0.31], [0.5, 0.47], [0.6, 0.66], 
         [0.7, 0.82], [0.8, 0.93], [0.9, 0.99], [1.0, 1.0], [1.1, 0.99], [1.2, 0.93], [1.3, 0.86], 
@@ -553,7 +582,15 @@ if __name__ == "__main__":
         [2.2, 0.207], [2.4, 0.147], [2.6, 0.107], [2.8, 0.077], [3.0, 0.055], [3.2, 0.04], 
         [3.4, 0.029], [3.6, 0.021], [3.8, 0.015], [4.0, 0.011], [4.5, 0.005], [5.0, 0.0], 
     ])
-    print(np.sum(default_curve_original[:,1]))
-    
+    # print(np.sum(default_curve_original[:,1]))
+    original_diffs = np.diff(default_curve_original[:,0])
+    original_total = np.sum(original_diffs * default_curve_original[1:,1])
+    print(f"Original total: {original_total}")
+    current_diffs = np.diff(unit_hydrograph_model.default_curve[:,0])
+    current_total = np.sum(current_diffs * unit_hydrograph_model.default_curve[1:,1])
+    print(f"Current total: {current_total}")
+    current2_diffs = np.diff(unit_hydrograph_model_2.default_curve[:,0])
+    current2_total = np.sum(current2_diffs * unit_hydrograph_model_2.default_curve[1:,1])
+    print(f"Current2 total: {current2_total}")
 
     
