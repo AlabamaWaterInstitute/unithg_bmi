@@ -33,9 +33,9 @@ def _finalize_info_categories(cls):
     return cls
 
 @_finalize_info_categories
-class Bmi_Pyflo(Bmi):
+class Bmi_Unithg(Bmi):
     """
-    A Basic Model Interface (BMI) wrapper for the PyFLO model.
+    A Basic Model Interface (BMI) wrapper for the unit hydrograph.
 
     Required model methods:
     - Bookkeeping:
@@ -128,7 +128,7 @@ class Bmi_Pyflo(Bmi):
             else:
                 self.value[0] = value
     # Internal model attributes
-    _name: str = "PyFlo_BMI"
+    _name: str = "unithg_bmi"
     _start_time: float
     _num_time_steps: int
     _time_step_size: float
@@ -193,9 +193,9 @@ class Bmi_Pyflo(Bmi):
         self.info()
         #Ensure these are initialized as instance variables, not class variables
         self._vars = {
-            Bmi_Pyflo.VarType.INPUT: [],
-            Bmi_Pyflo.VarType.OUTPUT: [],
-            Bmi_Pyflo.VarType.MODEL: [],
+            Bmi_Unithg.VarType.INPUT: [],
+            Bmi_Unithg.VarType.OUTPUT: [],
+            Bmi_Unithg.VarType.MODEL: [],
         }
         self._model = None
         self._model_data = {}

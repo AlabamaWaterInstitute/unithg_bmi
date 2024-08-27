@@ -3,12 +3,12 @@ from pathlib import Path
 from matplotlib import pyplot as plt
 import math, random, numpy as np
 
-import pyflo_bmi.pyflo_bmi as pyflo_bmi
+import unithg_bmi.unithg_bmi as unithg_bmi
 from time import time, perf_counter
 
 output_var = "discharge_calculated"
 # Load the model
-model = pyflo_bmi.Bmi_Pyflo()
+model = unithg_bmi.Bmi_Unithg()
 
 def init_model():
     catchment_area = 1.0

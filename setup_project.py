@@ -2,8 +2,8 @@ import sys, os, json, re, time, datetime, logging, traceback, ast
 from pathlib import Path
 from typing import Any
 
-project_name = "pyflo_bmi"
-proj_folder = Path("pyflo_bmi")
+project_name = "unithg_bmi"
+proj_folder = Path("unithg_bmi")
 this_folder = Path(".")
 requirements = []
 author_name = "Chad Perry"
@@ -73,7 +73,7 @@ def build_pyproject_toml(project_name:str, requirements:list[str], path:Path = t
     toml["project"] = {
         "name": project_name,
         "version": "0.1.0",
-        "description": "A Python-based Ngen-BMI model for the PyFlo module.",
+        "description": "A Python-based Ngen-BMI model for unit hydrograph.",
         "authors": [{"name": author_name}],
         "maintainers": [{"name": author_name}],
         "license": {"file": "LICENSE"},

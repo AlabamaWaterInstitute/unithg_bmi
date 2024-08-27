@@ -3,9 +3,9 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyflo_bmi"
+name = "unithg_bmi"
 version = "0.1.0"
-description = "A Python-based Ngen-BMI model for the PyFlo module."
+description = "A Python-based Ngen-BMI model for unit hydrograph."
 authors = [{name = "Chad Perry"}]
 maintainers = [{name = "Chad Perry"}]
 license = {file = "LICENSE"}

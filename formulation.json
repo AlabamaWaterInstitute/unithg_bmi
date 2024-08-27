@@ -1,14 +1,14 @@
 {
     "name": "bmi_python",
     "params": {
-        "name": "pyflo_bmi",
-        "model_type_name": "pyflo_bmi_model",
+        "name": "unithg_bmi",
+        "model_type_name": "unithg_bmi_model",
         "main_output_variable": "discharge_calculated",
         "init_config": "/dev/null",
         "allow_exceed_end_time": true,
         "uses_forcing_file": true,
         "forcing_file": "./forcings/by_catchment/{{id}}.csv",
-        "python_type": "pyflo_bmi.Bmi_Pyflo",
+        "python_type": "unithg_bmi.Bmi_Unithg",
         "output_variables": [
             "discharge_calculated",
             "APCP_surface"
