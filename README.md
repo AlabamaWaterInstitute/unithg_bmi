@@ -1,105 +1,78 @@
-#### OWP Open Source Project Template Instructions
+# unithg_bmi
 
-1. Create a new project.
-2. [Copy these files into the new project](#installation)
-3. Update the README, replacing the contents below as prescribed.
-4. Add any libraries, assets, or hard dependencies whose source code will be included
-   in the project's repository to the _Exceptions_ section in the [TERMS](TERMS.md).
-  - If no exceptions are needed, remove that section from TERMS.
-5. If working with an existing code base, answer the questions on the [open source checklist](opensource-checklist.md)
-6. Delete these instructions and everything up to the _Project Title_ from the README.
-7. Write some great software and tell people about it.
+## Description
 
-> Keep the README fresh! It's the first thing people see and will make the initial impression.
+This project is a Python-based Nextgen-BMI model that implements unit hydrograph functionality.
 
-## Installation
+## Table of Contents
 
-To install all of the template files, run the following script from the root of your project's directory:
+1. [unithg_bmi](#unithg_bmi)
+2. [Description](#description)
+3. [Setup](#setup)
+    1. [Dependencies](#dependencies)
+    2. [Installation](#installation)
+4. [Usage](#usage)
+5. [Testing](#testing)
+6. [Participation](#participation)
+    1. [Known Issues](#known-issues)
+    2. [Getting Help](#getting-help)
+    3. [Getting Involved](#getting-involved)
+7. [Open Source Licensing Info](#open-source-licensing-info)
+8. [Credits and References](#credits-and-references)
 
+## Setup
+
+### Dependencies
+
+The following dependencies are required for this project:
+
+1. bmipy
+2. matplotlib
+3. numpy
+
+### Installation
+
+To install this project, run the following command:
+
+```python
+pip install .
 ```
-bash -c "$(curl -s https://raw.githubusercontent.com/NOAA-OWP/owp-open-source-project-template/open_source_template.sh)"
-```
-
-----
-
-# Project Title
-
-**Description**:  Put a meaningful, short, plain-language description of what
-this project is trying to accomplish and why it matters.
-Describe the problem(s) this project solves.
-Describe how this software can improve the lives of its audience.
-
-Other things to include:
-
-  - **Technology stack**: Indicate the technological nature of the software, including primary programming language(s) and whether the software is intended as standalone or as a module in a framework or other ecosystem.
-  - **Status**:  Alpha, Beta, 1.1, etc. It's OK to write a sentence, too. The goal is to let interested people know where this project is at. This is also a good place to link to the [CHANGELOG](CHANGELOG.md).
-  - **Links to production or demo instances**
-  - Describe what sets this apart from related-projects. Linking to another doc or page is OK if this can't be expressed in a sentence or two.
-
-
-**Screenshot**: If the software has visual components, place a screenshot after the description; e.g.,
-
-![](https://raw.githubusercontent.com/NOAA-OWP/owp-open-source-project-template/master/doc/Screenshot.png)
-
-
-## Dependencies
-
-Describe any dependencies that must be installed for this software to work.
-This includes programming languages, databases or other storage mechanisms, build tools, frameworks, and so forth.
-If specific versions of other software are required, or known not to work, call that out.
-
-## Installation
-
-Detailed instructions on how to install, configure, and get the project running.
-This should be frequently tested to ensure reliability. Alternatively, link to
-a separate [INSTALL](INSTALL.md) document.
-
-## Configuration
-
-If the software is configurable, describe it in detail, either here or in other documentation to which you link.
 
 ## Usage
 
-Show users how to use the software.
-Be specific.
-Use appropriate formatting when showing code snippets.
+Using this project requires a working installation of [Ngen](https://github.com/NOAA-OWP/ngen), or a working dev container with Ngen installed, such as through [NGIAB-CloudInfra](https://github.com/CIROH-UA/NGIAB-CloudInfra).
 
-## How to test the software
+Once you have a working installation of Ngen, you can incorporate the included `formulation.json` into an Ngen realization file.
 
-If the software includes automated tests, detail how to run those tests.
+The last step is to ensure that this project is installed in the same environment as Ngen, such that it can be accessed by Ngen.
 
-## Known issues
+## Testing
 
-Document any known significant shortcomings with the software.
+This project currently does not include an automated testing suite.
 
-## Getting help
+However, most included functionality can be tested through the use of __name__ == '__main__' blocks, or the `test_module.py` script.
 
-Instruct users how to get help with this software; this might include links to an issue tracker, wiki, mailing list, etc.
+## Participation
 
-**Example**
+### Known Issues
 
-If you have questions, concerns, bug reports, etc, please file an issue in this repository's Issue Tracker.
+This project currently does not currently have any known issues.
 
-## Getting involved
+### Getting Help
 
-This section should detail why people should get involved and describe key areas you are
-currently focusing on; e.g., trying to get feedback on features, fixing certain bugs, building
-important pieces, etc.
+If you have questions or need help with this project, please contact the author, [Chad Perry](https://github.com/chp2001), or open an issue on the project's GitHub repository.
 
-General instructions on _how_ to contribute should be stated with a link to [CONTRIBUTING](CONTRIBUTING.md).
+### Getting Involved
 
+If you feel that something is missing or could be improved, please feel free to open an issue or a pull request. Additional details are available in the project's [CONTRIBUTING.md](CONTRIBUTING.md) file.
 
-----
+## Open Source Licensing Info
 
-## Open source licensing info
 1. [TERMS](TERMS.md)
 2. [LICENSE](LICENSE)
 
+## Credits and References
 
-----
+This project was created by [Chad Perry](https://github.com/chp2001) on July 16, 2024.
 
-## Credits and references
-
-1. Projects that inspired you
-2. Related projects
-3. Books, papers, talks, or other sources that have meaningful impact or influence on this project
+This README.md file was generated by a Python script on August 27, 2024.
