@@ -12,8 +12,8 @@ license = {file = "LICENSE"}
 requires-python = ">=3.9"
 dependencies = [
 	"bmipy",
+	"matplotlib",
 	"numpy",
-	"pyflo",
 ]
 
 [tool.setuptools.packages.find]

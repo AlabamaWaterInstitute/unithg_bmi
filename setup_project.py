@@ -28,6 +28,15 @@ def harvest_requirements(src_dir:Path = proj_folder, requirements:list[str] = []
                     requirements.append(node.module)
     return requirements
 
+def project_filenames(src_dir:Path = proj_folder, filenames:list[str] = []):
+    for name in src_dir.iterdir():
+        if name.is_dir():
+            project_filenames(name, filenames)
+        elif name.suffix == ".py":
+            filenames.append(name.name)
+    return filenames
+
+project_files = project_filenames()
 _requirements = harvest_requirements()
 for req in _requirements:
     _req = req
@@ -40,6 +49,8 @@ for req in _requirements:
     if "." in req:
         req = req.split(".")[0]
     if (proj_folder/req).exists() or (proj_folder/(req + ".py")).exists():
+        continue
+    if req + ".py" in project_files:
         continue
     print(f"Adding requirement: {_req}")
     requirements.append(req)
@@ -130,3 +141,4 @@ def build_init_py(path:Path = proj_folder/"__init__.py"):
     path.write_text("\n".join(imports))
 
 build_init_py()
+

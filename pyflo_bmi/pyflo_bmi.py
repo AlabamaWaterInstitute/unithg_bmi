@@ -8,7 +8,7 @@ import numpy as np
 from numpy import ndarray
 from .src import debug_utils as du
 from .src.debug_utils import UnimplementedError
-from .pyflo_model_reworked import unit_hydrograph_model
+from .unit_hydrograph_model import unit_hydrograph_model
 
 info_cats = {}
 # category decorator
@@ -95,7 +95,7 @@ class Bmi_Pyflo(Bmi):
         _defaults = ["", "float", 0.0, "m/s", 8, 8, "node", "none"]
         name, type, value, units, nbytes, itemsize, location, grid = _defaults
         value: np.ndarray
-        def __init__(self, name: str, type: str = None, value: Union[float, np.ndarray] = None, units: str = None, nbytes: int = None, itemsize: int = None, location: str = None, grid: str = None):
+        def __init__(self, name: str, type: Optional[str] = None, value: Optional[Union[float, np.ndarray]] = None, units: Optional[str] = None, nbytes: Optional[int] = None, itemsize: Optional[int] = None, location: Optional[str] = None, grid: Optional[str] = None):
             """
             Initialize a new variable object.
             """
@@ -129,18 +129,18 @@ class Bmi_Pyflo(Bmi):
                 self.value[0] = value
     # Internal model attributes
     _name: str = "PyFlo_BMI"
-    _start_time: float# = 0.0
-    _num_time_steps: int# = 720
-    _time_step_size: float# = 1.0
-    _end_time: float# = 0.0
-    _time: float# = 0.0
-    _time_step: int# = 0
+    _start_time: float
+    _num_time_steps: int
+    _time_step_size: float
+    _end_time: float
+    _time: float
+    _time_step: int
     _time_units: str = "s"
     # initialize in __init__ as instance variables
     _vars: dict[VarType, List[Var]] 
     _all_vars: dict[str, Var]
-    _model_data: dict[str, Any]# = {}
-    _model: object = None
+    _model_data: dict[str, Any]
+    _model: Optional[object] = None
     
     _info_categories: List[str] = [
         "python-builtin",
@@ -182,7 +182,7 @@ class Bmi_Pyflo(Bmi):
         "grid",
     ]
     
-    track_variables: List[str]# = []
+    track_variables: List[str]
         
     @_info_category(["py-init"])
     def __init__(self):

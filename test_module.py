@@ -3,11 +3,12 @@ from pathlib import Path
 from matplotlib import pyplot as plt
 import math, random, numpy as np
 
-import pyflo_bmi.bmi_pyflo as bmi_pyflo
+import pyflo_bmi.pyflo_bmi as pyflo_bmi
+from time import time, perf_counter
 
 output_var = "discharge_calculated"
 # Load the model
-model = bmi_pyflo.Bmi_Pyflo()
+model = pyflo_bmi.Bmi_Pyflo()
 
 def init_model():
     catchment_area = 1.0
@@ -48,4 +49,7 @@ def main():
     plot_data(precip, discharge)
     
 if __name__ == "__main__":
+    start = perf_counter()
     main()
+    end = perf_counter()
+    print(f"Execution time: {end - start} seconds")
