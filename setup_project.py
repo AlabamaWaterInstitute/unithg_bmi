@@ -435,6 +435,7 @@ class TableOfContents(Section):
         self.add(section.get_link(), section.indent)
         
 class MarkdownFile:
+    titleHeader:Optional[Header]
     sections:List[str]
     content:List[Section]
     table_of_contents:TableOfContents
@@ -453,10 +454,13 @@ class MarkdownFile:
                 return self.add_section(self.table_of_contents)
             raise ValueError(f"Invalid section: {section}")
         elif isinstance(section, Header):
-            section = Section(name=section.data, indent=section.indent)
+            # section = Section(name=section.data, indent=section.indent)
+            self.titleHeader = section
+            return
         self.add_section(section)
     def build(self)->str:
         result = ""
+        result += self.titleHeader.build() + "\n"
         for section in self.content:
             # print(f"Building section: {section.name}, {section.data}")
             section_str = section.build()
@@ -487,7 +491,7 @@ readme_sections = [
 def author_link()->Link:
     return Link((author_name, author_github_link))
 
-def build_project_title()->Markdown:
+def build_project_title()->Header:
     return Header(project_name, 1)
 
 def build_description(indent:int = 2)->Section:
@@ -559,7 +563,7 @@ def build_getting_involved(indent:int = 2)->Section:
 def build_open_source_licensing_info(indent:int = 2)->Section:
     licensing = Section("Open Source Licensing Info", indent=indent)
     info = OrderedList()
-    info += Link(("TERMS", "TERMS.md"))
+    # info += Link(("TERMS", "TERMS.md"))
     info += Link(("LICENSE", "LICENSE"))
     licensing += info
     return licensing
