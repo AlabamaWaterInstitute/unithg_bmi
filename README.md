@@ -2,7 +2,7 @@
 
 ## Description
 
-This project is a Python-based Nextgen-BMI model that implements unit hydrograph functionality.
+This project is a Python-based [BMI](https://github.com/NOAA-OWP/ngen/blob/master/doc/BMIconventions.md) model that implements unit hydrograph functionality for use with [Nextgen](https://github.com/NOAA-OWP/ngen).
 
 ## Table of Contents
 
@@ -31,7 +31,7 @@ The following dependencies are required for this project:
 
 ### Installation
 
-To install this project, run the following command:
+To install this project, run the following command in the project directory:
 
 ```python
 pip install .
