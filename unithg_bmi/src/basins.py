@@ -43,7 +43,7 @@ class Basin:
             volume (float): The volume to convert, in cubic meters.
             
         Returns:
-            float: The depth, in millimeters.
+            depth_mm (float): The depth, in millimeters.
         """
         area_m2 = self.area * FACTOR_CONVERSIONS["sqkm"]["sqm"]
         depth_m = volume / area_m2
@@ -58,15 +58,13 @@ class Basin:
             depth (float): The depth to convert, in millimeters.
             
         Returns:
-            float: The volume, in cubic meters.
+            depth (float): The volume, in cubic meters.
         """
         if isinstance(depth, Discretime):
             if depth.data_unit != "mm":
                 raise ValueError(f"Discretime data unit must be millimeters: {depth.data_unit}")
             depth.data_unit = "m3"
-        # depth_m = depth / FACTOR_CONVERSIONS["m"]["mm"]
-        # area_m2 = self.area * FACTOR_CONVERSIONS["sqkm"]["sqm"]
-        # volume = depth_m * area_m2
+            
         conversion_factor = self.area * FACTOR_CONVERSIONS["sqkm"]["sqm"] * FACTOR_CONVERSIONS["mm"]["m"]
         depth = depth * conversion_factor
         return depth
@@ -81,42 +79,12 @@ class Basin:
             interval (int): The interval to interpolate to, in minutes.
             
         Returns:
-            np.ndarray: The interpolated array.
+            interpolated (np.ndarray): The interpolated array.
         """
         if isinstance(array, Discretime):
             if array.interval == interval:
                 return array.data.copy()
         return Discretime.discrete_interpolate(array, interval)
-    
-    def segment_area_under_curve(self, curve:np.ndarray, index:int)->float:
-        """
-        Calculate the area under a segment of the curve.
-        
-        Args:
-            curve (numpy.ndarray): The curve to calculate the area under.
-            index (int): The index of the segment to calculate the area under.
-        
-        Returns:
-            float: The area under the segment of the curve.
-        """
-        if self.ordinate_geom_type == "right":
-            x1, y1 = curve[index]
-            x2, y2 = curve[index+1]
-            return (x2 - x1) * y1
-        elif self.ordinate_geom_type == "left":
-            x1, y1 = curve[index]
-            x2, y2 = curve[index+1]
-            return (x2 - x1) * y2
-        elif self.ordinate_geom_type == "midpoint":
-            x1, y1 = curve[index]
-            x2, y2 = curve[index+1]
-            return (x2 - x1) * (y1 + y2) / 2
-        elif self.ordinate_geom_type == "trapezoid":
-            x1, y1 = curve[index]
-            x2, y2 = curve[index+1]
-            return (x2 - x1) * (y1 + y2) / 2
-        else:
-            raise ValueError("Invalid ordinate geom type")
         
     def discrete_segment_area(self, curve:Discretime, index:int)->float:
         """
@@ -129,7 +97,7 @@ class Basin:
             index (int): The index of the segment to calculate the area under.
             
         Returns:
-            float: The area under the segment of the curve.
+            area (float): The area under the segment of the curve.
                 The ordinate is assumed to be unitless, so the area is in minutes..?
         """
         if self.ordinate_geom_type == "right":
@@ -142,23 +110,6 @@ class Basin:
             return (curve[index] + curve.data[index+1, 1]) * curve.interval / 2
         else:
             raise ValueError("Invalid ordinate geom type")
-            
-    def ordinate_area_under_curve(self, ordinate:np.ndarray)->float:
-        """
-        Calculate the area under the curve of the ordinate.
-        
-        Args:
-            ordinate (numpy.ndarray): The ordinate to calculate the area under the curve for.
-            
-        Returns:
-            float: The area under the curve.
-        """
-        if isinstance(ordinate, Discretime):
-            ordinate = ordinate.data
-        area = 0
-        for i in range(ordinate.shape[0]-1):
-            area += self.segment_area_under_curve(ordinate, i)
-        return area
     
     def discrete_ordinate_area(self, ordinate:Discretime)->float:
         """
@@ -170,29 +121,13 @@ class Basin:
             ordinate (Discretime): The ordinate to calculate the area under the curve for.
             
         Returns:
-            float: The area under the curve. 
+            area (float): The area under the curve. 
                 The ordinate is assumed to be unitless, so the area is in minutes..?
         """
         area = 0
         for i in range(ordinate.data.shape[0]-1):
             area += self.discrete_segment_area(ordinate, i)
         return area
-        
-    def unit_hydrograph(self, interval:int)->np.ndarray:
-        """
-        Generate a unit hydrograph for the basin.
-        
-        Args:
-            interval (int): The interval to increment calculations by, in minutes.
-            
-        Returns:
-            numpy.ndarray: The generated unit hydrograph.
-        """
-        interpolated = self.interpolate(self.ordinates, interval)
-        # print(type(interpolated))
-        area = self.ordinate_area_under_curve(interpolated)
-        interpolated[:, 1] /= area
-        return interpolated
     
     def discrete_unit_hydrograph(self, interval:int)->Discretime:
         """
@@ -202,7 +137,7 @@ class Basin:
             interval (int): The interval to increment calculations by, in minutes.
             
         Returns:
-            Discretime: The generated unit hydrograph.
+            interpolated (Discretime): The generated unit hydrograph.
         """
         if interval == self.ordinates.interval:
             interpolated = self.ordinates.copy()
@@ -213,35 +148,6 @@ class Basin:
         interpolated /= area
         return interpolated
     
-    def flood_data(self, rain_depths:np.ndarray, interval:int)->np.ndarray:
-        """
-        Generate pairs of basin runoff flow generated from rainfall over time.
-        
-        Args:
-            rain_depths (numpy.ndarray): A 2D array of scaled rainfall depths over time.
-            interval (int): The interval to increment calculations by, in minutes.
-            
-        Returns:
-            numpy.ndarray: The generated pairs of time and runoff flow generated from rainfall.
-        """
-        hydrograph = self.unit_hydrograph(interval)
-        rain_depths = rain_depths.copy()
-        # rain_depths = self.interpolate(rain_depths, interval)
-        rain_depths[:, 1] = self.depth_to_volume(rain_depths[:, 1])
-        latest_time = np.max(rain_depths[:, 0])
-        hydrograph_length = np.max(hydrograph[:, 0])
-        longest_time = int(latest_time + hydrograph_length)
-        flood_data = np.zeros((longest_time // interval + 1, 2))
-        flood_data[:, 0] = np.arange(0, longest_time + interval, interval)
-        for i in range(rain_depths.shape[0]):
-            time, depth = rain_depths[i]
-            for j in range(hydrograph.shape[0] - 1):
-                area_under_curve = self.segment_area_under_curve(hydrograph, j)
-                time_offset = hydrograph[j, 0]
-                timestep = int(time + time_offset) // interval
-                flood_data[timestep, 1] += area_under_curve * depth
-        return flood_data
-    
     def discrete_flood_data(self, rain_depths:Discretime, interval:int)->Discretime:
         """
         Generate pairs of basin runoff flow generated from rainfall over time.
@@ -251,7 +157,7 @@ class Basin:
             interval (int): The interval to increment calculations by, in minutes.
             
         Returns:
-            Discretime: The generated pairs of time and runoff flow generated from rainfall,
+            flood_data (Discretime): The generated pairs of time and runoff flow generated from rainfall,
                 in minutes and cubic meters.
         """
         hydrograph = self.discrete_unit_hydrograph(interval)
@@ -276,7 +182,7 @@ class Basin:
             end_ind (int): The index to stop calculating at.
             
         Returns:
-            Discretime: The generated pairs of time and runoff flow generated from rainfall,
+            data_subset (Discretime): The generated pairs of time and runoff flow generated from rainfall,
                 in minutes and cubic meters.
         """
         hydrograph = self.discrete_unit_hydrograph(interval)
@@ -302,40 +208,16 @@ class Basin:
             output_data += flood_curve
         return Discretime(output_data[:end_ind-start_ind, :], time_unit="minutes", data_unit="m3", interval=interval)
         
-
-    
-    def flood_data_partials(self, rain_depths: np.ndarray, interval: int)->List[np.ndarray]:
-        """
-        Generate a list of flood curves created by individual rainfall events.
-        """
-        if isinstance(rain_depths, Discretime):
-            return self.discrete_flood_data_partials(rain_depths, interval)
-        hydrograph = self.unit_hydrograph(interval)
-        rain_depths = rain_depths.copy()
-        rain_depths[:, 1] = self.depth_to_volume(rain_depths[:, 1])
-        latest_time = np.max(rain_depths[:, 0])
-        hydrograph_length = np.max(hydrograph[:, 0])
-        longest_time = int(latest_time + hydrograph_length)
-        flood_data = np.zeros((longest_time // interval + 1, 2))
-        flood_data[:, 0] = np.arange(0, longest_time + interval, interval)
-        num_rain_events = np.count_nonzero(rain_depths[:, 1])
-        partials = [flood_data.copy() for i in range(num_rain_events)]
-        n=0
-        for i in range(rain_depths.shape[0]):
-            time, depth = rain_depths[i]
-            if depth == 0:
-                continue
-            for j in range(hydrograph.shape[0] - 1):
-                area_under_curve = self.segment_area_under_curve(hydrograph, j)
-                time_offset = hydrograph[j, 0]
-                timestep = int(time + time_offset) // interval
-                partials[n][timestep, 1] += area_under_curve * depth
-            n+=1
-        return partials
-    
     def discrete_flood_data_partials(self, rain_depths: Discretime, interval: int)->List[Discretime]:
         """
         Generate a list of flood curves created by individual rainfall events.
+        
+        Args:
+            rain_depths (Discretime): A 2D array of scaled rainfall depths over time in minutes and millimeters.
+            interval (int): The interval to increment calculations by, in minutes.
+            
+        Returns:
+            partials (List[Discretime]): A list of generated pairs of time and runoff flow generated from rainfall,
         """
         hydrograph = self.discrete_unit_hydrograph(interval)
         rain_depths = rain_depths.copy()

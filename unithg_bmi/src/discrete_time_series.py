@@ -1,6 +1,9 @@
 from typing import List, Tuple, Dict, Set, Any, Union, Callable, Literal, Optional
 import numpy as np
 
+# discrete_time_series.py
+# Utility class for delegating the handling of discrete time series data
+# in a way consistent with hydrological expectations.
 
 IntervalType = Union[float, int]
 class Discretime:
@@ -109,64 +112,36 @@ class Discretime:
         Returns:
             numpy.ndarray: The interpolated data array.
         """
-        # from matplotlib import pyplot as plt, lines
-        # fig, axs = plt.subplots(4)
-        # axs:List[plt.Axes]
-        # axs[0].plot(data[:, 0], data[:, 1], label="Original", color="red")
-        # axs[0].scatter(data[:, 0], data[:, 1], color="red")
-        # axs[0].set_title("Original Data")
         if isinstance(data, Discretime):
             data = data.data
-        # print(data.shape)
         # Enforce that the data is discrete at the given interval
         discrete = Discretime.discretize(data, interval)
-        # print(discrete.shape)
-        # axs[1].plot(discrete[:, 0], discrete[:, 1], label="Discrete", color="blue")
-        # axs[1].scatter(discrete[:, 0], discrete[:, 1], color="blue")
-        # axs[1].set_title("Discrete Data")
         occupied_indices = {i: False for i in range(discrete.shape[0])}
         for i in range(data.shape[0]):
             time = data[i, 0]
             index = Discretime.round_to_interval(time, interval)
             occupied_indices[index] = True
-        # print(occupied_indices)
+        
         last_nonzero = -1
         for i in range(discrete.shape[0]):
             if occupied_indices[i] and last_nonzero == -1:
+                # If this is the first nonzero value, set the last nonzero value to this and continue
                 last_nonzero = i
             elif occupied_indices[i]:
+                # If this is a nonzero, and we've already seen a nonzero, interpolate between the two
                 start = last_nonzero
                 end = i
                 if end - start == 1:
-                    # print(f"Skipping {last_nonzero} to {end}")
+                    # If the two points are adjacent, no interpolation is needed
                     last_nonzero = i
                     continue
                 start_val = discrete[start, 1]
                 end_val = discrete[end, 1]
-                # start_time = discrete[start, 0]
-                # end_time = discrete[end, 0]
-                # line_arr = [
-                #     lines.Line2D([start_time, start_time], [0, start_val], color="red", linestyle="--"),
-                #     lines.Line2D([end_time, end_time], [0, end_val], color="red", linestyle="--"),
-                #     lines.Line2D([start_time, end_time], [start_val, end_val], color="red", linestyle="--"),
-                # ]
-                # print(f"Adding line from {start_time} to {end_time} with values {start_val} to {end_val}")
-                # for line in line_arr:
-                #     axs[2].add_line(line)
-                # axs[2].set_title("Interpolation")
+                
                 slope = (end_val - start_val) / (end - start)
                 for j in range(start + 1, end):
                     discrete[j, 1] = start_val + slope * (j - start)
                 last_nonzero = i
-            # else:
-            #     print(f"{last_nonzero} to {i} is zero")
-        # axs[2].autoscale()
-        # axs[3].plot(discrete[:, 0], discrete[:, 1], label="Interpolated", color="green")
-        # axs[3].plot(data[:, 0], data[:, 1], label="Original", color="blue")
-        # axs[3].scatter(discrete[:, 0], discrete[:, 1], color="green")
-        # axs[3].scatter(data[:, 0], data[:, 1], color="blue")
-        # axs[3].set_title("Interpolated Data")
-        # plt.show()
         
         return discrete
     
@@ -184,6 +159,9 @@ class Discretime:
         return Discretime(new_data, new_interval, self.time_unit, self.data_unit)
     
     def match_units(self, other:"Discretime")->None:
+        """
+        Ensure that the time and data units of two Discretime objects match.
+        """
         if self.time_unit != other.time_unit:
             raise ValueError(f"Time units must match: {self.time_unit} != {other.time_unit}")
         if self.data_unit == "unitless" or other.data_unit == "unitless":
@@ -193,6 +171,9 @@ class Discretime:
         
     @staticmethod
     def check_ndarray(data:np.ndarray)->None:
+        """
+        Ensure an ndarray is valid for use as a Discretime object.
+        """
         row, col = data.shape
         if row < 1:
             raise ValueError(f"Data must have at least one row: {data.shape}")
@@ -201,47 +182,67 @@ class Discretime:
         
     
     @staticmethod
-    def discrete_add(data1:np.ndarray, data2:np.ndarray, interval:IntervalType)->np.ndarray:
+    def discrete_add(
+        data1:Union["Discretime", np.ndarray],
+        data2:Union["Discretime", np.ndarray],
+        interval:IntervalType
+    )->np.ndarray:
         """
         Add two discrete time series data arrays.
         
+        Both data arguments can be Discretime objects or numpy arrays, but will be forced to the same interval.
+        
         Args:
-            data1 (numpy.ndarray): The first data array.
-            data2 (numpy.ndarray): The second data array.
-            interval (Union[float, int]): The allowed interval between data points.
+            data1 (Union[Discretime, numpy.ndarray]): The first data array.
+            data2 (Union[Discretime, numpy.ndarray]): The second data array.
+            interval (Union[float, int]): The interval of the data arrays.
+            
             
         Returns:
             numpy.ndarray: The sum of the two data arrays.
         """
         disc1, disc2 = data1, data2
+        
+        # Handle data1 / disc1 cases:
         if isinstance(data1, Discretime):
+            # If it's a discretime object, check if the interval matches
             if data1.interval != interval:
                 disc1 = data1.adjust_interval(interval)
         elif isinstance(data1, np.ndarray):
+            # If it's an ndarray, check if it's valid before converting to a Discretime object
             Discretime.check_ndarray(data1)
             disc1 = Discretime(data1, interval)
         else:
             raise ValueError(f"Unsupported type for addition: {type(data1)}")
+        
+        # Repeat for data2 / disc2
         if isinstance(data2, Discretime):
+            # If it's a discretime object, check if the interval matches
             if data2.interval != interval:
                 disc2 = data2.adjust_interval(interval)
         elif isinstance(data2, np.ndarray):
+            # If it's an ndarray, check if it's valid before converting to a Discretime object
             Discretime.check_ndarray(data2)
             disc2 = Discretime(data2, interval)
         else:
             raise ValueError(f"Unsupported type for addition: {type(data2)}")
+        
+        # Compare the start and end indices of the two data arrays
+        # to determine the start and end indices of the new data array
         start1, end1 = disc1.start_index, disc1.end_index
         start2, end2 = disc2.start_index, disc2.end_index
         mindex = min(start1, start2)
         maxdex = max(end1, end2)
         new_data = np.zeros((maxdex - mindex + 1, 2))
         new_data[:, 0] = np.arange(mindex, maxdex + 1) * interval
-        # print(f"Adding data from {start1} to {end1} and {start2} to {end2}")
-        # print(f"New data shape: {new_data.shape} from {disc1.data.shape} and {disc2.data.shape}")
+        
+        # Shift the start and end indices so that the data arrays are aligned
         start1, start2 = start1 - mindex, start2 - mindex
         end1, end2 = end1 - mindex, end2 - mindex
         new_data[start1:end1+1, 1] += disc1.values
         new_data[start2:end2+1, 1] += disc2.values
+        
+        # Return the sum of the two data arrays
         return new_data
     
     def copy(self)->"Discretime":
@@ -253,25 +254,57 @@ class Discretime:
         """
         return Discretime(self.data.copy(), self.interval, self.time_unit, self.data_unit)
     
+    ### Operator Overloads ###
+    
     def __iadd__(self, other)->"Discretime":
+        """
+        Augmented addition operator.
+        
+        Args:
+            other (Union[Discretime, numpy.ndarray, float, int]): The object to add.
+            
+        Returns:
+            Discretime: The modified Discretime object / self.
+        """
         if isinstance(other, Discretime):
+            # If the other object is a Discretime object, add the two data arrays
             self.match_units(other)
             self.data = Discretime.discrete_add(self, other, self.interval)
         elif isinstance(other, np.ndarray):
+            # If the other object is an ndarray, add the two data arrays
             Discretime.check_ndarray(other)
             self.data = Discretime.discrete_add(self, other, self.interval)
         elif isinstance(other, (int, float)):
+            # If the other object is a scalar, add it to the data array evenly
             self.data[:, 1] += other
         else:
             raise ValueError(f"Unsupported type for addition: {type(other)}")
         return self
     
     def __add__(self, other)->"Discretime":
+        """
+        Addition operator. Rather than duplicating code, this function calls the augmented addition operator.
+        
+        Args:
+            other (Union[Discretime, numpy.ndarray, float, int]): The object to add.
+            
+        Returns:
+            Discretime: The sum of the two objects.
+        """
         new = self.copy()
         new += other
         return new
     
     def __isub__(self, other)->"Discretime":
+        """
+        Augmented subtraction operator.
+        
+        Args:
+            other (Union[Discretime, numpy.ndarray, float, int]): The object to subtract.
+            
+        Returns:
+            Discretime: The modified Discretime object / self.
+        """
         if isinstance(other, Discretime):
             self.match_units(other)
             self.data = Discretime.discrete_add(self.data, -other.data, self.interval)
@@ -285,11 +318,29 @@ class Discretime:
         return self
     
     def __sub__(self, other)->"Discretime":
+        """
+        Subtraction operator. Rather than duplicating code, this function calls the augmented subtraction operator.
+        
+        Args:
+            other (Union[Discretime, numpy.ndarray, float, int]): The object to subtract.
+            
+        Returns:
+            Discretime: The difference of the two objects.
+        """
         new = self.copy()
         new -= other
         return new
     
     def __imul__(self, other)->"Discretime":
+        """
+        Augmented multiplication operator. Only supports scalar multiplication.
+        
+        Args:
+            other (Union[int, float]): The object to multiply by.
+            
+        Returns:
+            Discretime: The modified Discretime object / self.
+        """
         # Implemented only for scalar multiplication
         if isinstance(other, (int, float)):
             self.data[:, 1] *= other
@@ -298,11 +349,29 @@ class Discretime:
         return self
     
     def __mul__(self, other)->"Discretime":
+        """
+        Multiplication operator. Rather than duplicating code, this function calls the augmented multiplication operator.
+        
+        Args:
+            other (Union[int, float]): The object to multiply by.
+            
+        Returns:
+            Discretime: The product of the two objects.
+        """
         new = self.copy()
         new *= other
         return new
     
     def __itruediv__(self, other)->"Discretime":
+        """
+        Augmented division operator. Only supports scalar division.
+        
+        Args:
+            other (Union[int, float]): The object to divide by.
+            
+        Returns:
+            Discretime: The modified Discretime object / self.
+        """
         # Implemented only for scalar division
         if isinstance(other, (int, float)):
             self.data[:, 1] /= other
@@ -311,11 +380,29 @@ class Discretime:
         return self
     
     def __truediv__(self, other)->"Discretime":
+        """
+        Division operator. Rather than duplicating code, this function calls the augmented division operator.
+        
+        Args:
+            other (Union[int, float]): The object to divide by.
+            
+        Returns:
+            Discretime: The quotient of the two objects.
+        """
         new = self.copy()
         new /= other
         return new
     
     def __ifloordiv__(self, other)->"Discretime":
+        """
+        Augmented floor division operator. Only supports scalar division.
+        
+        Args:
+            other (Union[int, float]): The object to divide by.
+            
+        Returns:
+            Discretime: The modified Discretime object / self.
+        """
         # Implemented only for scalar division
         if isinstance(other, (int, float)):
             self.data[:, 1] //= other
@@ -324,11 +411,29 @@ class Discretime:
         return self
     
     def __floordiv__(self, other)->"Discretime":
+        """
+        Floor division operator. Rather than duplicating code, this function calls the augmented floor division operator.
+        
+        Args:
+            other (Union[int, float]): The object to divide by.
+            
+        Returns:
+            Discretime: The quotient of the two objects.
+        """
         new = self.copy()
         new //= other
         return new
     
     def __getitem__(self, index:Union[int, slice, tuple[Any, Any]])->Union[float, np.ndarray]:
+        """
+        Get a value or slice of values from the data array.
+        
+        Args:
+            index (Union[int, slice, tuple[Any, Any]): The index to get.
+            
+        Returns:
+            Union[float, np.ndarray]: The value or slice of values.
+        """
         if isinstance(index, int):
             return self.data[index, 1]
         elif isinstance(index, slice):
@@ -341,6 +446,16 @@ class Discretime:
             raise ValueError(f"Unsupported index: {index}")
         
     def __setitem__(self, index:Union[int, slice, tuple[Any, Any]], value:Union[float, np.ndarray])->None:
+        """
+        Set a value or slice of values in the data array.
+        
+        Args:
+            index (Union[int, slice, tuple[Any, Any]): The index to set.
+            value (Union[float, np.ndarray]): The value or values to set.
+            
+        Returns:
+            Union[float, np.ndarray]: The value or slice of values.
+        """
         if isinstance(index, int):
             self.data[index, 1] = value
         elif isinstance(index, slice):
@@ -390,9 +505,11 @@ class Discretime:
         self.data = np.zeros((new_size, 2))
         self.data[:, 0] = np.arange(new_size) * self.interval + old_start
         self.data[:old_data.shape[0], :] = old_data
-        # print(f"Resized data from {old_data.shape[0]} to {new_size}")
         
     def __iter__(self)->np.ndarray:
+        """
+        Iteration overload. Allows the Discretime object to be iterated over.
+        """
         return iter(self.data)
     
     def add_at_time(self, time:float, value:float)->None:

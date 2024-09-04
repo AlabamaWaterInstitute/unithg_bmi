@@ -265,7 +265,7 @@ if __name__ == "__main__":
     ax.set_ylabel("Runoff")
     fig.savefig(basindisplay / "flood_data.png")
     
-    flooddata_partials = basin.flood_data_partials(raindata, 5)
+    flooddata_partials = basin.discrete_flood_data_partials(raindata, 5)
     fig, ax = plt.subplots()
     ax:plt.Axes
     # barax = ax.twinx()

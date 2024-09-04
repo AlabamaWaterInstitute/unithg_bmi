@@ -1,7 +1,32 @@
-from typing import List, Tuple, Dict, Set, Any, Union, Callable, Literal, Optional, TypeVar
+from typing import List, Tuple, Dict, Set, Any, Union, Callable, Literal, Optional, TypeVar, Type
+from fractions import Fraction
+
+# conversions.py
+# This file provides a framework for defining and registering unit conversions.
+# It also provides a set of predefined conversions for common units.
+# The syntax involved with calling the conversions can ensure readability and consistency with unit conversions.
 
 FACTOR_CONVERSIONS = {}
+"""
+FACTOR_CONVERSIONS: Dict[str, Dict[str, float]]
+
+- Allows conversions between units of measurement to be accessed via a dictionary.
+- Only viable for ratio/factor conversions, not for more complex conversions.
+- `FACTOR_CONVERSIONS[unit1][unit2]` will return the conversion factor from `unit1` to `unit2` if it exists.
+- `register_factor(unit1:str, unit2:str, factor:float)` can be used to register a bidirectional conversion factor.
+"""
+
+FactorType = Tuple[str, str, float]
+
 def register_factor(unit1:str, unit2:str, factor:float):
+    """
+    Register a conversion factor between two units of measurement. Registers bidirectionally
+    
+    Args:
+        unit1 (str): The first unit of measurement.
+        unit2 (str): The second unit of measurement.
+        factor (float): The conversion factor from `unit1` to `unit2`.
+    """
     global FACTOR_CONVERSIONS
     if unit1 not in FACTOR_CONVERSIONS:
         FACTOR_CONVERSIONS[unit1] = {}
@@ -13,6 +38,12 @@ register_factor("in", "mm", 25.4)
 register_factor("sqkm", "acres", 247.1)
 register_factor("sqkm", "sqm", 1e6)
 METRIC_PREFIXES = {}
+"""
+METRIC_PREFIXES: Dict[str, int]
+
+- A dictionary that maps metric prefixes to their respective powers of 10.
+- Allows for easy recognition and conversion of metric units.
+"""
 # prefixes for small units, separated by 1e3
 _regular_prefix_short = ["y", "z", "a", "f", "p", "n", "u", "m", "", "k", "M", "G", "T", "P", "E", "Z", "Y"]
 METRIC_PREFIXES.update({
@@ -23,7 +54,29 @@ METRIC_PREFIXES.update({
 })
 METRIC_PREFIXES = dict(sorted(METRIC_PREFIXES.items(), key=lambda x: x[1]))
 METRIC_PREFIX_LIST = list(METRIC_PREFIXES.keys())
-def setup_prefix_conversion(baseunit:str, formatstr:str="{prefix}{baseunit}", prefixrange:List[str]=None, factor_func:Callable[[float], float]=lambda x: x):
+"""
+METRIC_PREFIX_LIST: List[str]
+
+- A list of metric prefixes, sorted from smallest to largest.
+"""
+def setup_prefix_conversion(
+    baseunit:str, 
+    formatstr:str = "{prefix}{baseunit}", 
+    prefixrange:List[str] = None, 
+    factor_func:Callable[[float], float]=lambda x: x
+):
+    """
+    Register conversion factors between a base unit and metric prefixes. 
+    - formatstr allows for custom formatting of the unit names.
+    - prefixrange allows for a subset of metric prefixes to be registered.
+    - factor_func allows for automatic conversion of !1 dimensional units, such as m2, m3, etc.
+    
+    Args:
+        baseunit (str): The base unit of measurement.
+        formatstr (str): The format string for the unit names. Defaults to "{prefix}{baseunit}".
+        prefixrange (List[str]): A list of metric prefixes to register. Defaults to all prefixes.
+        factor_func (Callable[[float], float]): A function to apply to the metric prefix power of 10. Defaults to the identity function.
+    """
     global METRIC_PREFIXES
     metric_keys = list(METRIC_PREFIXES.keys())
     if prefixrange:
@@ -48,63 +101,112 @@ setup_prefix_conversion("m3", factor_func=lambda x: 3*x)
 setup_prefix_conversion("m2", factor_func=lambda x: 2*x)
 register_factor("m2", "sqm", 1)
 register_factor("km2", "sqkm", 1)
+        
+def generic_network_conversion_setup(
+    given_factors: Dict[str, Dict[str, float]]
+)->List[FactorType]:
+    """
+    Given a dictionary of conversion edges in a unit system network, return a list of conversion factors to register.
+    
+    (FactorType = Tuple[str, str, float])
+    
+    Args:
+        given_factors (Dict[str, Dict[str, float]]): A dictionary of conversion edges in a unit system network.
+        
+    Returns:
+        result_factors (List[FactorType]): A list of conversion factors to register.
+        
+    Example:
+    ```
+    factors = {
+        "a" : {"b" : 2, "c" : 3}, # Will trigger an exception if a->b->c is not equal to a->c
+        "b" : {"c" : 4},
+        "c" : {"d" : 5}
+    }
+    ```
+    """
+    given_factors_fraction: Dict[str, Dict[str, Fraction]] = {
+        node1 : {node2 : Fraction(factor) for node2, factor in given_factors[node1].items()} for node1 in given_factors
+    }
+    result_factors: List[FactorType] = []
+    edges: Set[Tuple[str, str]] = set()
+    unique_key = lambda x: tuple(sorted(x))
+    adjacency_matrix: Dict[str, Dict[str, Fraction]] = {}
+    nodes: Dict[str, Set[str]] = {}
+    all_nodes: Set[str] = set()
+    
+    def add_adjacency(node1:str, node2:str, factor:Fraction):
+        nonlocal adjacency_matrix, edges, unique_key, result_factors, nodes
+        adjacency_matrix[node1] = adjacency_matrix.get(node1, {})
+        adjacency_matrix[node2] = adjacency_matrix.get(node2, {})
+        def check_conflict(oldfactor, newfactor, node1, node2):
+            if oldfactor != newfactor:
+                raise ValueError(f"Conflicting factors for {node1} -> {node2}: {oldfactor} vs {newfactor}.")
+        if node2 in adjacency_matrix[node1]:
+            check_conflict(adjacency_matrix[node1][node2], factor, node1, node2)
+        else:
+            adjacency_matrix[node1][node2] = factor
+        if node1 in adjacency_matrix[node2]:
+            check_conflict(adjacency_matrix[node2][node1], 1 / factor, node2, node1)
+        else:
+            adjacency_matrix[node2][node1] = 1 / factor
+        key = unique_key((node1, node2))
+        if key not in edges:
+            edges.add(key)
+            nodes[node1].add(node2)
+            nodes[node2].add(node1)
+            if factor.numerator > factor.denominator:
+                factor_float = float(factor.numerator / factor.denominator)
+                result_factors.append((node2, node1, factor_float))
+            else:
+                factor_float = float(factor.denominator / factor.numerator)
+                result_factors.append((node1, node2, factor_float))
+    
+    # quickly get all nodes
+    for node1 in given_factors_fraction:
+        all_nodes.add(node1)
+        for node2 in given_factors_fraction[node1]:
+            all_nodes.add(node2)
+    # set up nodes
+    for node in all_nodes:
+        nodes[node] = set()
+    # set up edges
+    for node1 in given_factors_fraction:
+        for node2 in given_factors_fraction[node1]:
+            add_adjacency(node1, node2, given_factors_fraction[node1][node2])
+    # set up transitive edges
+    def transitive_propagate(start_node:str, current_node:str, visited:Optional[Set[str]] = None):
+        nonlocal adjacency_matrix, nodes, add_adjacency
+        if visited is None:
+            visited = set()
+        if current_node in visited or start_node == current_node:
+            return
+        visited.add(current_node)
+        base_factor = adjacency_matrix[start_node][current_node]
+        for node in nodes[current_node]:
+            if node == start_node:
+                continue
+            factor = base_factor * adjacency_matrix[current_node][node]
+            add_adjacency(start_node, node, factor)
+            transitive_propagate(start_node, node, visited)
+    for node in all_nodes:
+        for subnode in list(nodes[node]):
+            transitive_propagate(node, subnode)
+    num_edges_per_node = {node : len(nodes[node]) for node in nodes}
+    if not all([num_edges_per_node[node] == len(all_nodes) - 1 for node in all_nodes]):
+        raise ValueError(f"Not all nodes are connected. {num_edges_per_node}\n{adjacency_matrix}")
+    return result_factors
+
 def setup_time_conversion():
-    units: List[str] = ["seconds", "minutes", "hours", "days", "weeks"]
-    factors: Dict[str, Dict[str, int]] = {
-        "minutes" : {"seconds" : 60},
-        "hours" : {"minutes" : 60},
-        "days" : {"hours" : 24},
-        "weeks" : {"days" : 7}
-        }
-    paths: List[List[str]] = [
-        ["minutes", "seconds"],
-        ["hours", "minutes"],
-        ["days", "hours"],
-        ["weeks", "days"]
-    ]
-    def calc_path_factor(path:List[str]):
-        factor = 1
-        for i in range(len(path)-1):
-            unit1 = path[i]
-            unit2 = path[i+1]
-            factor *= factors[unit1][unit2]
-        return factor
-    def find_path(unit1:str, unit2:str, path:List[str]=[]):
-        if unit1 == unit2:
-            start = path[0]
-            end = path[-1]
-            if start not in factors:
-                factors[start] = {}
-            if end not in factors[start]:
-                factors[start][end] = calc_path_factor(path)
-                paths.append(path)
-            elif len(paths) == 0:
-                paths.append(path)
-            return True
-        if unit1 not in factors:
-            path.remove(unit1)
-            if find_path(unit2, unit1, [unit2]):
-                return True
-        for unit in factors[unit1]:
-            if unit in path:
-                continue
-            if find_path(unit, unit2, path + [unit]):
-                return True
-    for unit1 in units:
-        for unit2 in units:
-            if unit1 == unit2:
-                continue
-            find_path(unit1, unit2, [unit1])
-            # print(paths[-1], unit1, unit2)
-    for path in paths:
-        factor = 1
-        for i in range(len(path)-1):
-            unit1 = path[i]
-            unit2 = path[i+1]
-            factor *= factors[unit1][unit2]
-        # print(path, factor)
-        register_factor(path[0], path[-1], factor)
-                
+    given_factors = {
+        "seconds" : {"minutes" : 60},
+        "minutes" : {"hours" : 60},
+        "hours" : {"days" : 24},
+        "days" : {"weeks" : 7}
+    }
+    factors = generic_network_conversion_setup(given_factors)
+    for unit1, unit2, factor in factors:
+        register_factor(unit1, unit2, factor)
 setup_time_conversion()
 
 if __name__ == "__main__":
